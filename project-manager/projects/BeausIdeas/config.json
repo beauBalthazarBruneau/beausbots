@@ -1,0 +1,25 @@
+{
+    "name": "BeausIdeas-DotCom",
+    "description": "Beau's personal website",
+    "tech_stack": [
+      "React-native",
+      "TypeScript",
+      "Vercel",
+      "github",
+      "linear"
+    ],
+    "integrations": {
+      "linear": {
+        "team_key": "PER",
+        "team_name": "Personal"
+      },
+      "github": {
+        "repo": "BeausIdeas-DotCom",
+        "owner": "beauBalthazarBruneau"
+      }
+    },
+    "context_path": "/Users/beaubruneau/Documents/beausbots/project-manager/projects/BeausIdeas/BeausIdeas-DotCom/context.md",
+    "created_at": "2025-09-01T22:00:00.000Z",
+    "updated_at": "2025-09-01T22:00:00.000Z"
+  }
+  

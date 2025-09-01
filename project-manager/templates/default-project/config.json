@@ -1,0 +1,23 @@
+{
+  "name": "{{PROJECT_NAME}}",
+  "description": "{{PROJECT_DESCRIPTION}}",
+  "tech_stack": [],
+  "integrations": {
+    "linear": {
+      "team_key": "{{PROJECT_TEAM_KEY}}",
+      "team_name": "{{PROJECT_TEAM_NAME}}"
+    },
+    "github": {
+      "repo": "{{PROJECT_NAME_SLUG}}",
+      "owner": "beaubruneau"
+    }
+  },
+  "code_paths": {
+    "root": "/Users/beaubruneau/Documents/side-projects/{{PROJECT_NAME_SLUG}}"
+  },
+  "documentation": {
+    "main": "context.md"
+  },
+  "created_at": "{{CREATED_AT}}",
+  "updated_at": "{{UPDATED_AT}}"
+}

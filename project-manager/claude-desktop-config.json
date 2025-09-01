@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "project-manager": {
+      "command": "node",
+      "args": ["/Users/beaubruneau/Documents/beausbots/project-manager/dist/index.js"],
+      "env": {}
+    }
+  }
+}

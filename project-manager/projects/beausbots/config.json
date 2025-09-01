@@ -1,0 +1,25 @@
+{
+  "name": "beausbots",
+  "description": "Automated software development pipeline connecting Warp, Linear, & Claude Desktop",
+  "tech_stack": [
+    "Node.js",
+    "TypeScript", 
+    "Model Context Protocol (MCP)",
+    "Linear MCP",
+    "Warp MCP",
+    "Claude Desktop"
+  ],
+  "integrations": {
+    "linear": {
+      "team_key": "BB",
+      "team_name": "BeausBots"
+    },
+    "github": {
+      "repo": "beausbots",
+      "owner": "beaubruneau"
+    }
+  },
+  "context_path": "/Users/beaubruneau/Documents/beausbots/project-manager/projects/beausbots/context.md",
+  "created_at": "2025-09-01T22:00:00.000Z",
+  "updated_at": "2025-09-01T22:00:00.000Z"
+}

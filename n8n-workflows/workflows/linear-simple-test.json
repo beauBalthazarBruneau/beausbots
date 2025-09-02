@@ -1,0 +1,161 @@
+{
+  "name": "Linear Simple Test Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "linear-test",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Linear Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract issue data from Linear webhook\nconst webhook = $input.first().json;\n\nconst issueId = webhook.data?.issue?.id;\nconst status = webhook.data?.issue?.state?.name;\nconst projectId = webhook.data?.issue?.project?.id;\n\nconsole.log('Webhook received:', {\n  issueId,\n  status,\n  projectId\n});\n\nreturn {\n  issueId,\n  status,\n  projectId,\n  webhook\n};"
+      },
+      "id": "parse-webhook",
+      "name": "Parse Webhook Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.linear.app/graphql",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_LINEAR_API_KEY_HERE"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"query\": \"query { project(id: \\\"{{ $json.projectId }}\\\") { id name description url createdAt updatedAt } }\"\n}",
+        "options": {}
+      },
+      "id": "get-project-info",
+      "name": "Get Project Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Print hello world and project info\nconst projectData = $input.first().json.data?.project;\nconst webhookData = $node['Parse Webhook Data'].json;\n\nconst message = `Hello World! 🌍\n\nLinear Issue Status: ${webhookData.status}\nProject: ${projectData?.name || 'Unknown'}\nProject URL: ${projectData?.url || 'N/A'}`;\n\nconsole.log('='.repeat(50));\nconsole.log(message);\nconsole.log('='.repeat(50));\n\nreturn {\n  message,\n  projectData,\n  webhookData,\n  helloWorld: 'Hello World! 🌍'\n};"
+      },
+      "id": "hello-world",
+      "name": "Hello World",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Linear Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Webhook Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Webhook Data": {
+      "main": [
+        [
+          {
+            "node": "Get Project Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Project Info": {
+      "main": [
+        [
+          {
+            "node": "Hello World",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hello World": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2025-02-02T01:07:00.000Z",
+      "updatedAt": "2025-02-02T01:07:00.000Z",
+      "id": "tag-1",
+      "name": "linear"
+    },
+    {
+      "createdAt": "2025-02-02T01:07:00.000Z",
+      "updatedAt": "2025-02-02T01:07:00.000Z",
+      "id": "tag-2",
+      "name": "test"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-02-02T01:07:00.000Z",
+  "versionId": "1"
+}

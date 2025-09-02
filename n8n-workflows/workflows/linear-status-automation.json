@@ -1,0 +1,399 @@
+{
+  "name": "Linear Status Automation with Claude",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "linear-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Linear Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and validate webhook data\nconst webhook = $input.first().json;\n\n// Only process issue update events\nif (webhook.action !== 'update') {\n  return { skip: true, reason: 'Not an update event' };\n}\n\nconst issue = webhook.data?.issue;\nif (!issue) {\n  return { skip: true, reason: 'No issue data' };\n}\n\nconst currentStatus = issue.state?.name;\nconst previousStatus = webhook.data?.fromState?.name;\n\n// Only process if status actually changed\nif (currentStatus === previousStatus) {\n  return { skip: true, reason: 'Status unchanged' };\n}\n\nreturn {\n  skip: false,\n  issueId: issue.id,\n  identifier: issue.identifier,\n  title: issue.title,\n  description: issue.description,\n  currentStatus,\n  previousStatus,\n  assignee: issue.assignee?.name,\n  project: {\n    id: issue.project?.id,\n    name: issue.project?.name\n  },\n  url: issue.url,\n  labels: issue.labels?.nodes?.map(l => l.name) || [],\n  webhook\n};"
+      },
+      "id": "parse-validate",
+      "name": "Parse & Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "should-skip",
+      "name": "Should Skip?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "backlog",
+              "leftValue": "={{ $json.currentStatus }}",
+              "rightValue": "Backlog",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "route-backlog",
+      "name": "Backlog?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "in-progress",
+              "leftValue": "={{ $json.currentStatus }}",
+              "rightValue": "In Progress",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "route-in-progress",
+      "name": "In Progress?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "ready-test-cases",
+              "leftValue": "={{ $json.currentStatus }}",
+              "rightValue": "Ready for test cases",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "route-test-cases",
+      "name": "Ready for Test Cases?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "in-review",
+              "leftValue": "={{ $json.currentStatus }}",
+              "rightValue": "In Review",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "route-in-review",
+      "name": "In Review?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "done",
+              "leftValue": "={{ $json.currentStatus }}",
+              "rightValue": "Done",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "route-done",
+      "name": "Done?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Backlog Status Prompt\nconst issue = $input.first().json;\n\nconst prompt = `You are a senior product manager analyzing a Linear issue that just moved to Backlog status.\n\nIssue Details:\n- Title: ${issue.title}\n- Description: ${issue.description}\n- Project: ${issue.project.name}\n- Previous Status: ${issue.previousStatus}\n- Labels: ${issue.labels.join(', ')}\n\nPlease analyze this issue and provide:\n\n1. **Priority Assessment**: Evaluate urgency and importance\n2. **Complexity Estimate**: Suggest story points (1, 2, 3, 5, 8, 13)\n3. **Dependencies**: Identify potential blockers or prerequisites\n4. **Acceptance Criteria Review**: Flag if acceptance criteria are missing or unclear\n5. **Resource Planning**: Suggest optimal team member assignment\n6. **Next Steps**: Recommend immediate actions\n\nProvide a structured response that can be added as a comment to the Linear issue.`;\n\nreturn {\n  prompt,\n  issueData: issue,\n  statusType: 'backlog'\n};"
+      },
+      "id": "prompt-backlog",
+      "name": "Backlog Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// In Progress Status Prompt\nconst issue = $input.first().json;\n\nconst prompt = `You are a technical lead analyzing a Linear issue that just moved to In Progress status.\n\nIssue Details:\n- Title: ${issue.title}\n- Description: ${issue.description}\n- Assignee: ${issue.assignee || 'Unassigned'}\n- Project: ${issue.project.name}\n- Previous Status: ${issue.previousStatus}\n\nPlease provide development guidance:\n\n1. **Technical Approach**: Suggest implementation strategy\n2. **Architecture Considerations**: Identify system impacts\n3. **Testing Strategy**: Recommend testing approach\n4. **Potential Risks**: Flag technical challenges\n5. **Resource Requirements**: Estimate time and dependencies\n6. **Definition of Done**: Clarify completion criteria\n\nProvide actionable guidance for the developer to ensure successful implementation.`;\n\nreturn {\n  prompt,\n  issueData: issue,\n  statusType: 'in-progress'\n};"
+      },
+      "id": "prompt-in-progress",
+      "name": "In Progress Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ready for Test Cases Status Prompt\nconst issue = $input.first().json;\n\nconst prompt = `You are a QA specialist analyzing a Linear issue that is ready for test cases.\n\nIssue Details:\n- Title: ${issue.title}\n- Description: ${issue.description}\n- Project: ${issue.project.name}\n- Previous Status: ${issue.previousStatus}\n\nPlease generate comprehensive test cases:\n\n1. **Functional Test Cases**: Cover all acceptance criteria\n2. **Edge Cases**: Identify boundary conditions\n3. **Error Scenarios**: Test failure conditions\n4. **User Experience Tests**: Validate user workflows\n5. **Integration Tests**: Check system interactions\n6. **Accessibility Tests**: Ensure compliance standards\n\nFormat each test case with:\n- **Test Case ID**: TC-[number]\n- **Description**: What is being tested\n- **Prerequisites**: Setup requirements\n- **Steps**: Detailed test steps\n- **Expected Result**: What should happen\n- **Priority**: High/Medium/Low\n\nGenerate 5-10 comprehensive test cases ready for QA execution.`;\n\nreturn {\n  prompt,\n  issueData: issue,\n  statusType: 'test-cases'\n};"
+      },
+      "id": "prompt-test-cases",
+      "name": "Test Cases Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// In Review Status Prompt\nconst issue = $input.first().json;\n\nconst prompt = `You are a senior developer conducting a code review for a Linear issue in Review status.\n\nIssue Details:\n- Title: ${issue.title}\n- Description: ${issue.description}\n- Assignee: ${issue.assignee || 'Unknown'}\n- Project: ${issue.project.name}\n- Previous Status: ${issue.previousStatus}\n\nPlease provide code review guidance:\n\n1. **Review Checklist**: Key areas to examine\n2. **Quality Standards**: Code quality requirements\n3. **Security Considerations**: Security review points\n4. **Performance Impact**: Performance review criteria\n5. **Documentation Requirements**: What docs need updating\n6. **Testing Validation**: Required test coverage\n\nGenerate a structured code review checklist and key focus areas for reviewers to ensure high-quality code delivery.`;\n\nreturn {\n  prompt,\n  issueData: issue,\n  statusType: 'in-review'\n};"
+      },
+      "id": "prompt-in-review",
+      "name": "In Review Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Done Status Prompt\nconst issue = $input.first().json;\n\nconst prompt = `You are a project manager analyzing a Linear issue that just completed (Done status).\n\nIssue Details:\n- Title: ${issue.title}\n- Description: ${issue.description}\n- Assignee: ${issue.assignee || 'Team'}\n- Project: ${issue.project.name}\n- Previous Status: ${issue.previousStatus}\n\nPlease provide completion analysis:\n\n1. **Delivery Summary**: Summarize what was accomplished\n2. **Success Metrics**: How to measure success\n3. **Stakeholder Communication**: Key points to communicate\n4. **Documentation Updates**: What needs to be updated\n5. **Follow-up Actions**: Any required next steps\n6. **Lessons Learned**: Key insights for future work\n\nGenerate a project completion summary and stakeholder communication template.`;\n\nreturn {\n  prompt,\n  issueData: issue,\n  statusType: 'done'\n};"
+      },
+      "id": "prompt-done",
+      "name": "Done Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 600]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_ANTHROPIC_API_KEY_HERE"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"model\": \"claude-3-sonnet-20240229\",\n  \"max_tokens\": 2000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.prompt }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "call-claude",
+      "name": "Call Claude API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.linear.app/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_LINEAR_API_KEY_HERE"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"query\": \"mutation { commentCreate(input: { issueId: \\\"{{ $node['Call Claude API'].json.issueData.issueId || $('Call Claude API').item.json.issueData.issueId }}\\\", body: \\\"## AI Analysis - {{ $node['Call Claude API'].json.statusType || $('Call Claude API').item.json.statusType }} Status\\n\\n{{ $json.content[0].text }}\\\" }) { success comment { id } } }\"\n}",
+        "options": {}
+      },
+      "id": "update-linear",
+      "name": "Add Comment to Linear",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Processed successfully\", \"issue\": $node['Parse & Validate'].json.identifier, \"status\": $node['Parse & Validate'].json.currentStatus } }}"
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"message\": \"Skipped\", \"reason\": $json.reason } }}"
+      },
+      "id": "skip-response",
+      "name": "Skip Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 500]
+    }
+  ],
+  "connections": {
+    "Linear Webhook": {
+      "main": [[{"node": "Parse & Validate", "type": "main", "index": 0}]]
+    },
+    "Parse & Validate": {
+      "main": [[{"node": "Should Skip?", "type": "main", "index": 0}]]
+    },
+    "Should Skip?": {
+      "main": [
+        [{"node": "Skip Response", "type": "main", "index": 0}],
+        [
+          {"node": "route-backlog", "type": "main", "index": 0},
+          {"node": "route-in-progress", "type": "main", "index": 0},
+          {"node": "route-test-cases", "type": "main", "index": 0},
+          {"node": "route-in-review", "type": "main", "index": 0},
+          {"node": "route-done", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "route-backlog": {
+      "main": [[{"node": "prompt-backlog", "type": "main", "index": 0}], []]
+    },
+    "route-in-progress": {
+      "main": [[{"node": "prompt-in-progress", "type": "main", "index": 0}], []]
+    },
+    "route-test-cases": {
+      "main": [[{"node": "prompt-test-cases", "type": "main", "index": 0}], []]
+    },
+    "route-in-review": {
+      "main": [[{"node": "prompt-in-review", "type": "main", "index": 0}], []]
+    },
+    "route-done": {
+      "main": [[{"node": "prompt-done", "type": "main", "index": 0}], []]
+    },
+    "prompt-backlog": {
+      "main": [[{"node": "call-claude", "type": "main", "index": 0}]]
+    },
+    "prompt-in-progress": {
+      "main": [[{"node": "call-claude", "type": "main", "index": 0}]]
+    },
+    "prompt-test-cases": {
+      "main": [[{"node": "call-claude", "type": "main", "index": 0}]]
+    },
+    "prompt-in-review": {
+      "main": [[{"node": "call-claude", "type": "main", "index": 0}]]
+    },
+    "prompt-done": {
+      "main": [[{"node": "call-claude", "type": "main", "index": 0}]]
+    },
+    "call-claude": {
+      "main": [[{"node": "update-linear", "type": "main", "index": 0}]]
+    },
+    "update-linear": {
+      "main": [[{"node": "success-response", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2025-02-02T01:37:00.000Z",
+      "updatedAt": "2025-02-02T01:37:00.000Z",
+      "id": "tag-1",
+      "name": "linear"
+    },
+    {
+      "createdAt": "2025-02-02T01:37:00.000Z",
+      "updatedAt": "2025-02-02T01:37:00.000Z",
+      "id": "tag-2",
+      "name": "automation"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-02-02T01:37:00.000Z",
+  "versionId": "1"
+}

@@ -1,0 +1,276 @@
+{
+  "name": "Linear Webhook to MCP Bridge",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "linear-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Linear Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "update",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "condition-2",
+              "leftValue": "={{ $json.data?.issue?.state?.name }}",
+              "rightValue": "Ready for test cases",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-status",
+      "name": "Filter for Test Cases Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Linear webhook data\nconst webhookData = $input.first().json;\n\n// Extract issue information\nconst issue = {\n  id: webhookData.data?.issue?.id,\n  identifier: webhookData.data?.issue?.identifier,\n  title: webhookData.data?.issue?.title,\n  description: webhookData.data?.issue?.description,\n  status: webhookData.data?.issue?.state?.name,\n  labels: webhookData.data?.issue?.labels?.nodes?.map(label => label.name) || [],\n  assignee: webhookData.data?.issue?.assignee?.name,\n  project: webhookData.data?.issue?.project?.name,\n  url: webhookData.data?.issue?.url,\n  createdAt: webhookData.data?.issue?.createdAt,\n  updatedAt: webhookData.data?.issue?.updatedAt\n};\n\n// Prepare data for MCP\nconst mcpRequest = {\n  action: 'process_linear_status_change',\n  issue: issue,\n  webhook_data: webhookData,\n  timestamp: new Date().toISOString()\n};\n\nreturn { mcpRequest };"
+      },
+      "id": "parse-webhook",
+      "name": "Parse Linear Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/webhooks/linear",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-beausbots-bridge/1.0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "={{ $json.mcpRequest.action }}"
+            },
+            {
+              "name": "issue",
+              "value": "={{ JSON.stringify($json.mcpRequest.issue) }}"
+            },
+            {
+              "name": "webhook_data",
+              "value": "={{ JSON.stringify($json.mcpRequest.webhook_data) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000,
+          "retry": {
+            "enabled": true,
+            "maxAttempts": 3,
+            "waitBetween": 1000
+          }
+        }
+      },
+      "id": "call-mcp",
+      "name": "Call Local MCP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Webhook processed successfully\", \"issue\": $node['Parse Linear Data'].json.mcpRequest.issue.identifier, \"mcp_response\": $json } }}"
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"message\": \"Issue not in target status\", \"status\": $json.data?.issue?.state?.name } }}"
+      },
+      "id": "skip-response",
+      "name": "Skip Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        680,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log error details\nconsole.error('MCP call failed:', $json);\n\n// Return error response\nreturn { \n  error: true,\n  message: 'Failed to call MCP server',\n  details: $json,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "error-handler",
+      "name": "Handle MCP Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"message\": \"MCP server error\", \"error\": $json } }}"
+      },
+      "id": "error-response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "Linear Webhook": {
+      "main": [
+        [
+          {
+            "node": "Filter for Test Cases Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter for Test Cases Status": {
+      "main": [
+        [
+          {
+            "node": "Parse Linear Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Linear Data": {
+      "main": [
+        [
+          {
+            "node": "Call Local MCP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Local MCP": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Handle MCP Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle MCP Error": {
+      "main": [
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2025-02-01T00:00:00.000Z",
+      "updatedAt": "2025-02-01T00:00:00.000Z",
+      "id": "tag-1",
+      "name": "linear"
+    },
+    {
+      "createdAt": "2025-02-01T00:00:00.000Z", 
+      "updatedAt": "2025-02-01T00:00:00.000Z",
+      "id": "tag-2",
+      "name": "webhook"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-02-01T00:00:00.000Z",
+  "versionId": "1"
+}
